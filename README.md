@@ -19,3 +19,4 @@ The course is divided across two source code repositories:
 
 ## Apply
 If you wish to apply for the course, please visit [UniversityAdmissions](https://www.universityadmissions.se/intl/start) and search for "Applied Cloud Computing and Big Data".
+# bigdata
