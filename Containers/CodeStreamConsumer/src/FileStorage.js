@@ -16,18 +16,21 @@ class FileStorage {
     get filenames() { return this.#myFileNames; }
 
     isFileProcessed(fileName) {
-        return false; // FIXME: sometimes this returns true even when it shouldn't. Probably a race condition.
-        return this.#myFileNames.includes(fileName);
+    // Return true if filename already stored
+    return this.#myFileNames.includes(fileName);
     }
 
     storeFile(file) {
         if (!this.isFileProcessed(file.name)) {
-            //console.log('Adding file', file.name, 'to storage. Now containing', 1+this.#myNumberOfFiles, 'files.');
             this.#myFileNames.push(file.name);
             this.#myNumberOfFiles++;
 
-            // FUTURE Use a database instead.
-            this.#myFiles.push(file);
+            // store minimal metadata only
+            const meta = {
+                name: file.name,
+                chunks: file.chunks, // keep chunk lineNumbers but not full contents (ChunkIndex has chunk content)
+            };
+            this.#myFiles.push(meta);
         }
 
         return file;

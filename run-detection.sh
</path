@@ -1,0 +1,16 @@
+ter name="content">#!/bin/bash
+# Start the clone detection system
+
+cd "$(dirname "$0\")"
+
+echo "Starting MongoDB..."
+docker-compose up -d dbstorage
+
+echo "Waiting for MongoDB to be ready..."
+sleep 10
+
+echo "Starting MonitorTool..."
+docker-compose up -d monitor-tool
+
+echo "Starting Clone Detector (this will take hours for full corpus)..."
+docker-compose up clone-detector

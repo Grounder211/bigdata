@@ -28,21 +28,29 @@
 
 
 (defn chunkify-file [chunkSize file]
-  (try (let [fileName (.getPath file)
-             filteredLines (filter #(not (= "" (:contents %)))
-                                   (-> file
-                                       slurp
-                                       (string/split #"\n")
-                                       process-lines))
-             iterator (range (- (count filteredLines) chunkSize))]
-         (map (fn [%]
-                (let [chunk (take chunkSize (nthrest filteredLines %))
-                      startLine (:lineNumber (first chunk))
-                      endLine (:lineNumber (last chunk))
-                      hash (digest/md5 (string/join "\n" (map :contents chunk)))]
-                  {:fileName fileName :startLine startLine :endLine endLine :chunkHash hash}))
-              iterator))
-       (catch Exception e [])))
+  (try
+    (let [start (System/nanoTime)
+          fileName (.getPath file)
+          chunk-limit (or (some-> (System/getenv "CHUNK_LIMIT") Integer/parseInt) 0)
+          filteredLines (filter #(not (= "" (:contents %)))
+                                (-> file
+                                    slurp
+                                    (string/split #"\n")
+                                    process-lines))
+          total-chunks (max 0 (- (count filteredLines) chunkSize))
+          max-iter (if (and chunk-limit (> chunk-limit 0)) (min total-chunks chunk-limit) total-chunks)
+          iterator (range max-iter)
+          chunks (doall (map (fn [%]
+                               (let [chunk (take chunkSize (nthrest filteredLines %))
+                                     startLine (:lineNumber (first chunk))
+                                     endLine (:lineNumber (last chunk))
+                                     hash (digest/md5 (string/join "\n" (map :contents chunk)))]
+                                 {:fileName fileName :startLine startLine :endLine endLine :chunkHash hash}))
+                             iterator))
+          duration (/ (- (System/nanoTime) start) 1000000.0)]
+      (println (str "Chunkified " fileName " in " duration " ms, chunks: " (count chunks)))
+      chunks)
+    (catch Exception e [])))
 
 (defn chunkify [chunkSize files]
   (map #(chunkify-file chunkSize %) files))

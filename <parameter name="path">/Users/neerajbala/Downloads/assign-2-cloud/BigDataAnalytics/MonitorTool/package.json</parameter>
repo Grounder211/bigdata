@@ -1,0 +1,13 @@
+<parameter name="content">{
+  "name": "monitortool",
+  "version": "1.0.0",
+  "description": "Monitor Tool for Clone Detection",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.0.0"
+  }
+}
+</parameter>

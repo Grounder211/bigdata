@@ -1,0 +1,255 @@
+<parameter name="content">(ns cljdetector.storage.storage
+  (:require [monger.core :as mg]
+            [monger.collection :as mc]
+            [monger.operators :refer :all]
+            [monger.conversion :refer [from-db-object]]))
+
+(def DEFAULT-DBHOST "localhost")
+(def dbname "cloneDetector")
+(def partition-size (or (some-> (System/getenv "BATCH_SIZE") Integer/parseInt) 1000))
+(def hostname (or (System/getenv "DBHOST") DEFAULT-DBHOST))
+;; MODIFIED: Added statistics to the list of collections
+(def collnames ["files"  "chunks" "candidates" "clones" "statusUpdates" "statistics"])
+
+;; Index management helpers to reduce write amplification during chunking
+(defn drop-chunk-indexes! []
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "chunks"]
+    (try
+      ;; Drop all indexes on chunks to speed up bulk inserts
+      (mc/drop-indexes db collname)
+      (catch Exception e
+        (println "Warning: Could not drop chunk indexes" (.getMessage e))))))
+
+(defn create-chunk-indexes! []
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "chunks"]
+    (try
+      ;; Recreate useful indexes post-insert
+      (mc/ensure-index db collname {:chunkHash 1})
+      (mc/ensure-index db collname {:fileName 1 :startLine 1 :endLine 1})
+      (catch Exception e
+        (println "Warning: Could not create chunk indexes" (.getMessage e))))))
+
+(defn print-statistics []
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)]
+    (doseq [coll collnames]
+      (println "db contains" (mc/count db coll) coll))))
+
+(defn clear-db! []
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)]
+    (doseq [coll collnames]
+      (mc/drop db coll))))
+
+(defn count-items [collname]
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)]
+    (mc/count db collname)))
+
+(defn store-files! [files]
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "files"
+        file-parted (partition-all partition-size files)]
+    (doseq [file-group file-parted]
+      (try
+        (mc/insert-batch db collname (map (fn [f] {:fileName (.getPath f) :contents (slurp f)}) file-group))
+        (catch Exception e
+          (println "Error storing files:" (.getMessage e)))))))
+
+;; Batch inserts using insert-batch with larger partitions; assumes indexes disabled beforehand.
+(defn store-chunks! [chunks]
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "chunks"
+        chunk-parted (partition-all partition-size (flatten chunks))]
+    (doseq [chunk-group chunk-parted]
+      (try
+        (mc/insert-batch db collname chunk-group)
+        (catch Exception e
+          (println "Error storing chunks:" (.getMessage e)))))))
+
+(defn store-clones! [clones]
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)
+        collname "clones"
+        clones-parted (partition-all partition-size clones)]
+    (doseq [clone-group clones-parted]
+      (try
+        (mc/insert-batch db collname (map identity clone-group))
+        (catch Exception e
+          (println "Error storing clones:" (.getMessage e)))))))
+
+;; NEW: Statistics recording function - writes to both MongoDB and file
+(defn add-stat! [phase payload]
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        record (merge {:timestamp (.toString (java.time.LocalDateTime/now))
+                     :phase phase}
+                    payload)
+        stats-file (or (System/getenv "STATS_LOG") "logs/stats.ndjson")]
+    (try
+      ;; Insert into MongoDB statistics collection
+      (mc/insert db "statistics" record)
+      (println "STAT_RECORDED:" phase "-" (pr-str record))
+      (catch Exception e
+        (println "Error recording statistics:" (.getMessage e))))
+    (try
+      ;; ensure directory exists
+      (let [f (java.io.File. stats-file)
+            dir (.getParentFile f)]
+        (when (and dir (not (.exists dir)))
+          (.mkdirs dir)))
+      ;; write as EDN per line (portable without extra deps)
+      (spit stats-file (str (pr-str record) "\n") :append true)
+      (catch Exception e
+        ;; ignore file write errors silently to not block pipeline
+        nil))))
+
+;; NEW: Status update logging function for MonitorTool
+(defn addUpdate! [timestamp message]
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "statusUpdates"]
+    (try
+      (mc/insert db collname {:timestamp timestamp :message message})
+      (catch Exception e
+        (println "Error logging status update:" (.getMessage e))))))
+
+(defn avg-clone-size []
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)]
+    (try
+      (first
+       (mc/aggregate db "clones"
+                     [{$project {:size {:$sum [{$subtract ["$instances.endLine" "$instances.startLine"]}]}}}
+                      {$group {:_id nil :avgSize {:$avg "$size"}}}]))
+      (catch Exception e
+        (println "Error calculating avg clone size:" (.getMessage e))
+        nil))))
+
+(defn avg-chunks-per-file []
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)]
+    (try
+      (first
+       (mc/aggregate db "chunks"
+                     [{$group {:_id "$fileName" :chunks {:$sum 1}}}
+                      {$group {:_id nil :avgChunks {:$avg "$chunks"}}}]))
+      (catch Exception e
+        (println "Error calculating avg chunks per file:" (.getMessage e))
+        nil))))
+
+(defn identify-candidates! []
+  (let [conn (mg/connect {:host hostname})
+        db (mg/get-db conn dbname)
+        collname "chunks"]
+    (try
+      (mc/aggregate db collname
+                    [{$group {:_id "$chunkHash"
+                              :instances {$push {:fileName "$fileName"
+                                                 :startLine "$startLine"
+                                                 :endLine "$endLine"}}}}
+                     {$match {$expr {$gt [{$size "$instances"} 1]}}}
+                     {$out "candidates"}])
+      (catch Exception e
+        (println "Error identifying candidates:" (.getMessage e))))))
+
+
+(defn consolidate-clones-and-source []
+  (let [conn (mg/connect {:host hostname})        
+        db (mg/get-db conn dbname)
+        collname "clones"]
+    (mc/aggregate db collname
+                  [{$project {:_id 0 :instances "$instances" :sourcePosition {$first "$instances"}}}
+                   {"$addFields" {:cloneLength {"$subtract" ["$sourcePosition.endLine" "$sourcePosition.startLine"]}}}
+                   {$lookup
+                    {:from "files"
+                     :let {:sourceName "$sourcePosition.fileName"
+                           :sourceStart {"$subtract" ["$sourcePosition.startLine" 1]}
+                           :sourceLength "$cloneLength"}
+                     :pipeline
+                     [{$match {$expr {$eq ["$fileName" "$$sourceName"]}}}
+                      {$project {:contents {"$split" ["$contents" "\n"]}}}
+                      {$project {:contents {"$slice" ["$contents" "$$sourceStart" "$$sourceLength"]}}}
+                      {$project
+                       {:_id 0
+                        :contents 
+                        {"$reduce"
+                         {:input "$contents"
+                          :initialValue ""
+                          :in {"$concat"
+                               ["$$value"
+                                {"$cond" [{"$eq" ["$$value", ""]}, "", "\n"]}
+                                "$$this"]
+                               }}}}}]
+                     :as "sourceContents"}}
+                   {$project {:_id 0 :instances 1 :contents "$sourceContents.contents"}}])))
+
+
+(defn get-dbconnection []
+  (mg/connect {:host hostname}))
+
+(defn get-one-candidate [conn]
+  (let [db (mg/get-db conn dbname)
+        collname "candidates"]
+    (try
+      (from-db-object (mc/find-one db collname {}) true)
+      (catch Exception e
+        (println "Error getting candidate:" (.getMessage e))
+        nil))))
+
+(defn get-overlapping-candidates [conn candidate]
+  (let [db (mg/get-db conn dbname)
+        collname "candidates"]
+    (try
+      (let [clj-cand (from-db-object candidate true)]
+        (mc/aggregate db collname
+                      [{$match {"instances.fileName" {$all (map #(:fileName %) (:instances clj-cand))}}}
+                       {$addFields {:candidate candidate}}
+                       {$unwind "$instances"}
+                       {$project 
+                        {:matches
+                         {$filter
+                          {:input "$candidate.instances"
+                           :cond {$and [{$eq ["$$this.fileName" "$instances.fileName"]}
+                                        {$or [{$and [{$gt  ["$$this.startLine" "$instances.startLine"]}
+                                                     {$lte ["$$this.startLine" "$instances.endLine"]}]}
+                                              {$and [{$gt  ["$instances.startLine" "$$this.startLine"]}
+                                                     {$lte ["$instances.startLine" "$$this.endLine"]}]}]}]}}}
+                         :instances 1
+                         :numberOfInstances 1
+                         :candidate 1
+                         }}
+                       {$match {$expr {$gt [{$size "$matches"} 0]}}}
+                       {$group {:_id "$_id"
+                                :candidate {$first "$candidate"}
+                                :numberOfInstances {$max "$numberOfInstances"}
+                                :instances {$push "$instances"}}}
+                       {$match {$expr {$eq [{$size "$candidate.instances"} "$numberOfInstances"]}}}
+                       {$project {:_id 1 :numberOfInstances 1 :instances 1}}]))
+      (catch Exception e
+        (println "Error getting overlapping candidates:" (.getMessage e))
+        []))))
+
+(defn remove-overlapping-candidates! [conn candidates]
+  (let [db (mg/get-db conn dbname)
+        collname "candidates"]
+    (try
+      (mc/remove db collname {:_id {$in (map #(:_id %) candidates)}})
+      (catch Exception e
+        (println "Error removing overlapping candidates:" (.getMessage e))))))
+
+(defn store-clone! [conn clone]
+  (let [db (mg/get-db conn dbname)
+        collname "clones"
+        anonymous-clone (select-keys clone [:numberOfInstances :instances])]
+    (try
+      (mc/insert db collname anonymous-clone)
+      (catch Exception e
+        (println "Error storing clone:" (.getMessage e))))))
+</parameter>

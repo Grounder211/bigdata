@@ -18,9 +18,35 @@ services:
     image: csconsumer
     volumes:
       - ./Containers/CodeStreamConsumer/src:/app/src
+      - ./logs:/app/logs
     ports:
       - 8080:3000
+
+  dbstorage:
+    image: mongo
+    restart: always
+    command: ["--quiet", "--syslog", "--wiredTigerCacheSizeGB", "2"]
+    ports:
+      - 27017:27017
+    expose:
+      - "27017"
+    volumes:
+      - dbstorage:/data/db
+      - dbconfig:/data/configdb
+
+  monitor-tool:
+    build: ./MonitorTool
+    environment:
+      DBHOST: dbstorage
+      NODE_OPTIONS: "--max-old-space-size=1024"
+      STATS_SUMMARY: "/app/logs/summary.json"
+    depends_on:
+      - dbstorage
+    volumes:
+      - ./logs:/app/logs
 volumes:
   qc-volume:
     external: true
+  dbstorage:
+  dbconfig:
     

@@ -1,0 +1,13 @@
+{
+  "name": "monitor-tool",
+  "version": "1.0.0",
+  "description": "Monitors clone detection progress and statistics",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mongodb": "^5.9.0"
+  }
+}
+

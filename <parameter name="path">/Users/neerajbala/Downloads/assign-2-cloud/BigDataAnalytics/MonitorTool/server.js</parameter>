@@ -1,0 +1,108 @@
+<parameter name="content">const { MongoClient } = require('mongodb');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const DBHOST = process.env.DBHOST || 'localhost';
+const DBNAME = 'cloneDetector';
+const PORT = process.env.PORT || 3001;
+
+async function getStats(client) {
+  const db = client.db(DBNAME);
+  
+  // Get counts from all collections
+  const files = await db.collection('files').countDocuments();
+  const chunks = await db.collection('chunks').countDocuments();
+  const candidates = await db.collection('candidates').countDocuments();
+  const clones = await db.collection('clones').countDocuments();
+  
+  // Get status updates
+  const statusUpdates = await db.collection('statusUpdates')
+    .find({})
+    .sort({ timestamp: -1 })
+    .limit(20)
+    .toArray();
+  
+  // Get statistics from statistics collection
+  const stats = await db.collection('statistics')
+    .find({})
+    .sort({ timestamp: -1 })
+    .limit(100)
+    .toArray();
+  
+  // Calculate per-phase statistics
+  const perPhase = await db.collection('statistics').aggregate([
+    { $group: { 
+        _id: '$phase', 
+        count: { $sum: 1 },
+        avgDurationMs: { $avg: '$durationMs' },
+        lastDurationMs: { $last: '$durationMs' },
+        maxDurationMs: { $max: '$durationMs' },
+        totalItems: { $sum: { $ifNull: ['$chunks', '$candidates', '$clones', '$files', 0] } }
+    }}
+  ]).toArray();
+  
+  return {
+    files,
+    chunks,
+    candidates,
+    clones,
+    statusUpdates,
+    statistics: stats,
+    perPhase
+  };
+}
+
+async function main() {
+  const uri = `mongodb://${DBHOST}:27017`;
+  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+  
+  try {
+    await client.connect();
+    console.log('MonitorTool connected to MongoDB');
+    
+    // Create HTTP server
+    const server = http.createServer(async (req, res) => {
+      // Set CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      
+      if (req.url === '/data' || req.url === '/') {
+        try {
+          const stats = await getStats(client);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(stats, null, 2));
+        } catch (err) {
+          console.error('Error getting stats:', err.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      } else if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+      } else {
+        res.writeHead(404);
+        res.end('Not Found');
+      }
+    });
+    
+    server.listen(PORT, () => {
+      console.log(`MonitorTool listening at http://localhost:${PORT}`);
+      console.log(`Access stats at: http://localhost:${PORT}/data`);
+    });
+    
+  } catch (err) {
+    console.error('MonitorTool failed to connect:', err.message);
+    process.exit(1);
+  }
+}
+
+main();
+</parameter>

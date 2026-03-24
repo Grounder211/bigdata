@@ -1,14 +1,12 @@
 # Docker Compose for All-At-Once Code Clone Detection
-
-version: "3.8"
 services:
   clone-detector:
     image: cljdetector
-    command: clear 
     ports:
       - 8080:3000
     volumes:
       - ./Containers/cljdetector:/usr/src/app
+      - ./logs:/usr/src/app/logs
       - qc-volume:/QualitasCorpus
     environment:
       DBHOST: dbstorage
@@ -16,11 +14,37 @@ services:
       SOURCEDIReclipse: "/QualitasCorpus/QualitasCorpus-20130901r/Systems/eclipse_SDK"
       SOURCEDIR: "/QualitasCorpus"
       CHUNKSIZE: 20
+      JAVA_OPTS: "-Xmx12g -Xms4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ParallelRefProcEnabled"
+      BATCH_SIZE: 2000
+      STATS_LOG: "/usr/src/app/logs/stats.ndjson"
+
+  monitor-tool:
+    build: ./MonitorTool
+    environment:
+      DBHOST: dbstorage
+      NODE_OPTIONS: "--max-old-space-size=1024"
+      STATS_SUMMARY: "/app/logs/summary.json"
+    depends_on:
+      - dbstorage
+    volumes:
+      - ./logs:/app/logs
+
+  monitor-dashboard:
+    build: ./MonitorTool
+    ports:
+      - "3001:3001"
+    environment:
+      DBHOST: dbstorage
+      PORT: "3001"
+    depends_on:
+      - dbstorage
+    volumes:
+      - ./logs:/app/logs
 
   dbstorage:
     image: mongo
     restart: always
-    command: --quiet --syslog
+    command: ["--quiet", "--syslog", "--wiredTigerCacheSizeGB", "2"]
     ports:
       - 27017:27017
     expose:
@@ -28,7 +52,7 @@ services:
     volumes:
       - dbstorage:/data/db
       - dbconfig:/data/configdb
-    
+
 volumes:
   dbstorage:
   dbconfig:

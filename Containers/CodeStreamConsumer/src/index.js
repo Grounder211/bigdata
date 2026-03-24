@@ -9,16 +9,35 @@ const CloneDetector = require('./CloneDetector');
 const CloneStorage = require('./CloneStorage');
 const FileStorage = require('./FileStorage');
 
+// Global error handlers to capture crashes
+process.on('uncaughtException', (err) => {
+    console.error('uncaughtException', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason, p) => {
+    console.error('unhandledRejection', reason);
+});
 
-// Express and Formidable stuff to receice a file for further processing
-// --------------------
-const form = formidable({multiples:false});
 
+// Express and Formidable stuff to receive a file for further processing
+// Create a new Formidable instance per request to avoid adding listeners to a single instance
 app.post('/', fileReceiver );
 function fileReceiver(req, res, next) {
+    const form = formidable({multiples:false});
     form.parse(req, (err, fields, files) => {
-        fs.readFile(files.data.filepath, { encoding: 'utf8' })
-            .then( data => { return processFile(fields.name, data); });
+        if (err) {
+            console.log('Form parse error:', err);
+            return res.status(400).end('parse error');
+        }
+
+        const upload = (files && (files.data || files.file || files.upload));
+        if (!upload || !upload.filepath) {
+            console.log('No uploaded file found in request. fields:', fields, 'files:', Object.keys(files || {}));
+            return res.status(400).end('no file');
+        }
+
+        fs.readFile(upload.filepath, { encoding: 'utf8' })
+            .then( data => { return processFile(fields.name || upload.originalFilename || upload.newFilename || 'unknown', data); })
+            .catch( e => { console.log(e); });
     });
     return res.end('');
 }
@@ -106,6 +125,9 @@ PASS = fn => d => {
 const STATS_FREQ = 100;
 const URL = process.env.URL || 'http://localhost:8080/';
 var lastFile = null;
+// In-memory timers history. Each entry: { name, numLines, timers }
+const TIMERS_HISTORY_MAX = 1000;
+const timersHistory = [];
 
 function maybePrintStatistics(file, cloneDetector, cloneStore) {
     if (0 == cloneDetector.numberOfProcessedFiles % STATS_FREQ) {
@@ -124,31 +146,88 @@ function maybePrintStatistics(file, cloneDetector, cloneStore) {
 
 // Processing of the file
 // --------------------
-function processFile(filename, contents) {
+async function processFile(filename, contents) {
     let cd = new CloneDetector();
     let cloneStore = CloneStorage.getInstance();
 
-    return Promise.resolve({name: filename, contents: contents} )
-        //.then( PASS( (file) => console.log('Processing file:', file.name) ))
-        .then( (file) => Timer.startTimer(file, 'total') )
-        .then( (file) => cd.preprocess(file) )
-        .then( (file) => cd.transform(file) )
+    try {
+        let file = { name: filename, contents };
+        file = Timer.startTimer(file, 'total');
+        file = await cd.preprocess(file);
+        file = await cd.transform(file);
 
-        .then( (file) => Timer.startTimer(file, 'match') )
-        .then( (file) => cd.matchDetect(file) )
-        .then( (file) => cloneStore.storeClones(file) )
-        .then( (file) => Timer.endTimer(file, 'match') )
+        file = Timer.startTimer(file, 'match');
+        file = await cd.matchDetect(file);
+        file = cloneStore.storeClones(file);
+        file = Timer.endTimer(file, 'match');
 
-        .then( (file) => cd.storeFile(file) )
-        .then( (file) => Timer.endTimer(file, 'total') )
-        .then( PASS( (file) => lastFile = file ))
-        .then( PASS( (file) => maybePrintStatistics(file, cd, cloneStore) ))
-    // TODO Store the timers from every file (or every 10th file), create a new landing page /timers
-    // and display more in depth statistics there. Examples include:
-    // average times per file, average times per last 100 files, last 1000 files.
-    // Perhaps throw in a graph over all files.
-        .catch( console.log );
-};
+        file = cd.storeFile(file);
+        file = Timer.endTimer(file, 'total');
+        lastFile = file;
+        maybePrintStatistics(file, cd, cloneStore);
+        storeTimersPASS(file);
+    } catch (e) {
+        console.log(e);
+    }
+}
+
+// Store timers into history for later inspection
+function storeTimersHistory(file) {
+    if (!file) return;
+    const entry = {
+        name: file.name,
+        numLines: file.contents ? file.contents.split('\n').length : 0,
+        timers: Timer.getTimers(file) || {}
+    };
+
+    timersHistory.push(entry);
+    if (timersHistory.length > TIMERS_HISTORY_MAX) timersHistory.shift();
+}
+
+// New endpoint to view more detailed timing statistics
+app.get('/timers', (req, res) => {
+    // query param n for last n entries, default 100
+    const n = Math.min(1000, parseInt(req.query.n) || 100);
+    const slice = timersHistory.slice(-n);
+
+    // compute averages for each timer key
+    const sums = {};
+    let count = 0;
+    for (let e of slice) {
+        count++;
+        for (let k in e.timers) {
+            sums[k] = (sums[k] || 0n) + BigInt(e.timers[k] || 0n);
+        }
+    }
+
+    const avgs = {};
+    for (let k in sums) {
+        avgs[k] = Number(sums[k] / BigInt(Math.max(1, count)));
+    }
+
+    let page = '<HTML><HEAD><TITLE>Timing statistics</TITLE></HEAD>\n<BODY><H1>Timing statistics</H1>';
+    page += '<p>Showing last ' + slice.length + ' entries</p>';
+    page += '<h2>Averages (nanoseconds)</h2><ul>';
+    for (let k in avgs) page += '<li>' + k + ': ' + avgs[k] + '</li>';
+    page += '</ul>';
+
+    page += '<h2>Entries</h2>';
+    for (let e of slice.reverse()) {
+        page += '<hr><h3>' + e.name + ' (' + e.numLines + ' lines)</h3><ul>';
+        for (let k in e.timers) {
+            page += '<li>' + k + ': ' + e.timers[k] + '</li>';
+        }
+        page += '</ul>';
+    }
+
+    page += '</BODY></HTML>';
+    res.send(page);
+});
+
+// Hook storing timers after clone storage and file store
+// We use the PASS helper to store timers
+const storeTimersPASS = (file) => { storeTimersHistory(file); return file; };
+
 
 /*
 1. Preprocessing: Remove uninteresting code, determine source and comparison units/granularities

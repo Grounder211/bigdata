@@ -7,6 +7,7 @@ const closeMultiLineComment = /^[\*\/]*\*+\//;
 const SourceLine = require('./SourceLine');
 const FileStorage = require('./FileStorage');
 const Clone = require('./Clone');
+const ChunkIndex = require('./ChunkIndex');
 
 const DEFAULT_CHUNKSIZE=5;
 
@@ -92,7 +93,18 @@ class CloneDetector {
         // Return: file, including file.instances which is an array of Clone objects (or an empty array).
         //
 
-        file.instances = file.instances || [];        
+        file.instances = file.instances || [];
+
+        // For each chunk in file, find matching chunks in compareFile
+        const newInstances = file.chunks
+            .map( chunk => {
+                // Find all matching chunks in compareFile
+                const matches = compareFile.chunks.filter( c2 => this.#chunkMatch(chunk, c2) );
+                // Map matches to Clone objects
+                return matches.map( m => new Clone(file.name, compareFile.name, chunk, m) );
+            })
+            .flat();
+
         file.instances = file.instances.concat(newInstances);
         return file;
     }
@@ -112,6 +124,20 @@ class CloneDetector {
         //         and not any of the Clones used during that expansion.
         //
 
+        const acc = [];
+        for (let clone of file.instances || []) {
+            // try to expand against existing accumulated clones
+            let expanded = false;
+            for (let a of acc) {
+                if (a.sourceName === clone.sourceName && a.maybeExpandWith(clone)) {
+                    expanded = true;
+                    break;
+                }
+            }
+            if (!expanded) acc.push(clone);
+        }
+
+        file.instances = acc;
         return file;
     }
     
@@ -129,6 +155,16 @@ class CloneDetector {
         // Return: file, with file.instances containing unique Clone objects that may contain several targets
         //
 
+        const acc = [];
+        for (let clone of file.instances || []) {
+            let existing = acc.find( c => c.equals(clone) );
+            if (existing) {
+                existing.addTarget(clone);
+            } else {
+                acc.push(clone);
+            }
+        }
+        file.instances = acc;
         return file;
     }
     
@@ -147,34 +183,39 @@ class CloneDetector {
         });
     }
 
-    transform(file) {
+    async transform(file) {
         file = this.#filterLines(file);
         file = this.#chunkify(file);
+        // Index all chunks for quick lookup (persisted)
+        const idx = ChunkIndex.getInstance();
+        for (let chunk of file.chunks) {
+            // don't await every call serially to avoid slowdown; fire-and-forget is acceptable here
+            idx.add(file.name, chunk[0].lineNumber, chunk).catch && idx.add(file.name, chunk[0].lineNumber, chunk);
+        }
         return file;
     }
 
-    matchDetect(file) {
-        let allFiles = this.#myFileStore.getAllFiles();
+    async matchDetect(file) {
+        // Use chunk index to find candidates rather than scanning all files
+        const idx = ChunkIndex.getInstance();
         file.instances = file.instances || [];
-        for (let f of allFiles) {
-            // TODO implement these methods (or re-write the function matchDetect() to your own liking)
-            // 
-            // Overall process:
-            // 
-            // 1. Find all equal chunks in file and f. Represent each matching pair as a Clone.
-            //
-            // 2. For each Clone with endLine=x, merge it with Clone with endLine-1=x
-            //    remove the now redundant clone, rinse & repeat.
-            //    note that you may end up with several "root" Clones for each processed file f
-            //    if there are more than one clone between the file f and the current
-            //
-            // 3. If the same clone is found in several places, consolidate them into one Clone.
-            //
-            file = this.#filterCloneCandidates(file, f); 
-            file = this.#expandCloneCandidates(file);
-            file = this.#consolidateClones(file); 
+
+        for (let chunk of file.chunks) {
+            const matches = await idx.lookup(chunk);
+            for (let m of matches) {
+                if (m.name === file.name) continue;
+                // m.chunk contains the stored chunk string (joined lines)
+                if (!m.chunk) {
+                    // missing chunk content in index entry; skip
+                    continue;
+                }
+                const targetLines = m.chunk.split('\n').map( (c, i) => new SourceLine(m.startLine + i, c) );
+                file.instances.push( new Clone(file.name, m.name, chunk, targetLines) );
+            }
         }
 
+        file = this.#expandCloneCandidates(file);
+        file = this.#consolidateClones(file);
         return file;
     }
 

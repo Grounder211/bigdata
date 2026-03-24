@@ -1,0 +1,38 @@
+# docker-compose.yml - For Qualitas Corpus Processing
+# Usage: docker-compose up -d
+
+version: '3.8'
+
+services:
+  codestream-consumer:
+    build: .
+    container_name: codestream-consumer
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CHUNKSIZE=5
+      - MAX_FILE_SIZE=10485760
+      - MAX_TOKENS=100000
+      - BATCH_SIZE=100
+      - URL=http://localhost:3000/
+      - DEBUG=csconsumer:*
+    volumes:
+      # Mount data directory for statistics and index
+      - ./data:/app/data
+      # Mount input directory for Qualitas Corpus
+      - ./input:/app/input:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# To process files from the input directory:
+# 1. Place .java files in ./input/
+# 2. Access http://localhost:3000/ to view results
+# 3. Use http://localhost:3000/monitor for detailed statistics
+# 4. Download statistics via http://localhost:3000/export-csv
+
