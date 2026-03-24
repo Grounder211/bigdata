@@ -1,23 +1,35 @@
-# TODO List for Big Data Analytics Assignment
+# cljDetector Assignment Fixes - TODO Steps
 
-## Completed Tasks
-- [x] Modify cljDetector.core/ts-println to log status updates to database
-- [x] Add storage/addUpdate! function to insert into 'statusUpdates' collection
-- [x] Create MonitorTool container with Node.js, Express, MongoDB driver
-- [x] Implement monitoring logic: poll database every 10 seconds for counts and status updates
-- [x] Calculate processing statistics: rates and time per unit for files, chunks, candidates, clones
-- [x] Create web visualization with current stats, status updates, and processing time trends
-- [x] Update all-at-once.yaml to include MonitorTool service
-- [x] Build MonitorTool Docker image
+## Current Progress: 0/8 ✅
 
-## Pending Tasks
-- [x] Run the full system on Qualitas Corpus (test run completed)
-- [x] Monitor the processing via web interface at http://localhost:3001
-- [x] Collect statistics over time (counts, processing times, trends)
-- [x] Analyze trends: determine if processing times are constant, linear, or exponential
-- [x] Prepare report with:
-  - Summary of modifications
-  - Raw data sample from monitoring
-  - Analysis of processing time trends
-  - Answers to assignment questions
-- [x] Zip modified code and YAML for submission
+### Step 1: [✅] Add `time-phase` function to storage.clj
+   - Wraps function execution with duration/count stats
+
+### Step 2: [✅] Update core.clj 
+   - Use `time-phase` for all 4 phases (files/chunks/candidates/expansion)
+   - Ensure calls `expander/expand-clones` (streaming version)
+
+### Step 3: [✅] Enhance source_processor.clj
+   - Add `GC-INTERVAL 500` + batch limits during chunkify-all
+
+### Step 4: [✅] Create read-stats.js
+   - Export first 100 statistics lines as CSV for assignment
+
+### Step 5: [ ] Update CHANGES.md
+    - Document all modifications [PENDING - precise append]
+
+### Step 6: [✅] Tune all-at-once.yaml
+    - 16g heap, G1GC, depends_on, CHUNK_LIMIT
+
+### Step 7: [✅] Create run-detection.sh
+    - docker-compose up + tail logs + open monitor
+
+### Step 8: [✅] Test run ready (Docker daemon needed)
+    - Fixed build in yaml + run-detection.sh with docker build
+    - Start Docker Desktop → `run-detection.sh` → generates stats
+
+---
+
+**Next: Complete Step 1 → mark [✅] → Step 2...**
+
+**Success Criteria:** Streaming processes full test corpus without OOM → stats/logs generated → ready for REPORT.md

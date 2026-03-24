@@ -1,0 +1,3 @@
+{:timestamp "2026-03-24T14:21:52.437773175", :phase "files", :durationMs 160114}
+{:timestamp "2026-03-24T15:23:01.766532637", :phase "chunkify", :durationMs 3669202}
+{:timestamp "2026-03-24T15:27:06.470470555", :phase "chunkify", :chunks 20123043, :files 163589}

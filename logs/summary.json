@@ -1,85 +1,76 @@
 {
-  "generatedAt": "2026-01-16T15:58:02.295Z",
-  "perPhase": [],
+  "generatedAt": "2026-03-24T16:13:42.030Z",
+  "uptime": 6873,
+  "counts": {
+    "files": 163589,
+    "chunks": 20123043,
+    "candidates": 0,
+    "clones": 0,
+    "statusUpdates": 5
+  },
+  "withRates": {
+    "files": 163589,
+    "chunks": 20123043,
+    "candidates": 0,
+    "clones": 0,
+    "updates": 5,
+    "timestamp": 1774368822018,
+    "rates": {
+      "filesPerSec": "0.00",
+      "chunksPerSec": "0.00",
+      "candidatesPerSec": "0.00",
+      "clonesPerSec": "0.00"
+    },
+    "timePerUnit": {
+      "fileMs": "0.000000",
+      "chunkMs": "0.000000"
+    }
+  },
+  "statistics": [
+    {
+      "_id": "69c29e00bdc8561e906d4b53",
+      "timestamp": "2026-03-24T14:21:52.437773175",
+      "phase": "files",
+      "durationMs": 160114
+    },
+    {
+      "_id": "69c2ac55bdc8561e90a058f7",
+      "timestamp": "2026-03-24T15:23:01.766532637",
+      "phase": "chunkify",
+      "durationMs": 3669202
+    },
+    {
+      "_id": "69c2ad4abdc8561e90a058f9",
+      "timestamp": "2026-03-24T15:27:06.470470555",
+      "phase": "chunkify",
+      "chunks": 20123043,
+      "files": 163589
+    }
+  ],
   "latestUpdates": [
     {
-      "_id": "6937f1f88e89ae1d06f272df",
-      "timestamp": "2025-12-09T09:55:04.569675958",
-      "message": "Storing chunks of size 20 ..."
+      "_id": "69c2ad4abdc8561e90a058fb",
+      "timestamp": "2026-03-24T15:27:06.986570138",
+      "message": "Identifying clone candidates..."
     },
     {
-      "_id": "6937f1d58e89ae1d06f0964c",
-      "timestamp": "2025-12-09T09:54:29.707427012",
-      "message": "Storing files..."
+      "_id": "69c2ad4abdc8561e90a058fa",
+      "timestamp": "2026-03-24T15:27:06.916117430",
+      "message": "Finished chunking: 20123043 chunks"
     },
     {
-      "_id": "6937f1d58e89ae1d06f09649",
-      "timestamp": "2025-12-09T09:54:29.697873054",
-      "message": "Dropping chunk indexes to speed inserts..."
+      "_id": "69c2ac55bdc8561e90a058f8",
+      "timestamp": "2026-03-24T15:23:01.801777887",
+      "message": "Recreating chunk indexes..."
     },
     {
-      "_id": "6937f1d58e89ae1d06f09647",
-      "timestamp": "2025-12-09T09:54:29.566739762",
-      "message": "Reading and Processing files..."
+      "_id": "69c29d60bdc8561e906acc4d",
+      "timestamp": "2026-03-24T14:19:12.295263712",
+      "message": "Dropping chunk indexes..."
     },
     {
-      "_id": "69313e8d4ebbe871ec06ef17",
-      "timestamp": "2025-12-04T07:55:57.943987552",
-      "message": "Storing chunks of size 20 ..."
-    },
-    {
-      "_id": "69313e494ebbe871ec051284",
-      "timestamp": "2025-12-04T07:54:49.763848673",
-      "message": "Storing files..."
-    },
-    {
-      "_id": "69313e494ebbe871ec051281",
-      "timestamp": "2025-12-04T07:54:49.726096631",
-      "message": "Dropping chunk indexes to speed inserts..."
-    },
-    {
-      "_id": "69313e494ebbe871ec05127f",
-      "timestamp": "2025-12-04T07:54:49.378278548",
-      "message": "Reading and Processing files..."
-    },
-    {
-      "_id": "69313cf719cc4324b3987a5a",
-      "timestamp": "2025-12-04T07:49:11.188198419",
-      "message": "Storing chunks of size 20 ..."
-    },
-    {
-      "_id": "69313ca519cc4324b39699df",
-      "timestamp": "2025-12-04T07:47:49.675041382",
-      "message": "Storing files..."
-    },
-    {
-      "_id": "69313ca519cc4324b39699dc",
-      "timestamp": "2025-12-04T07:47:49.649817423",
-      "message": "Dropping chunk indexes to speed inserts..."
-    },
-    {
-      "_id": "69313ca519cc4324b39699da",
-      "timestamp": "2025-12-04T07:47:49.395557298",
-      "message": "Reading and Processing files..."
-    },
-    {
-      "_id": "693136f3ca3ec604f3df7992",
-      "timestamp": "2025-12-04T07:23:31.366410383",
-      "message": "Storing chunks of size 20 ..."
-    },
-    {
-      "_id": "693136aeca3ec604f3dd9917",
-      "timestamp": "2025-12-04T07:22:22.079192753",
-      "message": "Storing files..."
-    },
-    {
-      "_id": "693136aeca3ec604f3dd9914",
-      "timestamp": "2025-12-04T07:22:22.054597920",
-      "message": "Dropping chunk indexes to speed inserts..."
-    },
-    {
-      "_id": "693136aeca3ec604f3dd9912",
-      "timestamp": "2025-12-04T07:22:22.038484211",
+      "_id": "69c29d60bdc8561e906acc4c",
+      "timestamp": "2026-03-24T14:19:12.293829503",
       "message": "Reading and Processing files..."
     }
   ]
