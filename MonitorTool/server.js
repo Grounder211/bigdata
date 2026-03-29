@@ -167,84 +167,158 @@ function generateDashboard(summary) {
 <head>
   <title>Clone Detection Monitor</title>
   <style>
-    body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 20px; }
-    .header { background: #16213e; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-    .stat-card { background: #16213e; padding: 15px; border-radius: 8px; border: 1px solid #0f3460; }
-    .stat-card h3 { color: #e94560; margin-bottom: 10px; }
-    .stat-value { font-size: 1.8em; color: #00d9ff; }
-    .stat-rate { color: #00ff88; font-size: 0.9em; }
-    .section { background: #16213e; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-    .section h2 { color: #e94560; margin-bottom: 10px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; padding: 20px; min-height: 100vh; margin: 0; }
+    .header { text-align: center; color: white; margin-bottom: 30px; }
+    .header h1 { margin: 0 0 10px 0; font-size: 2.5em; text-shadow: 0 2px 4px rgba(0,0,0,0.2); animation: slideDown 0.6s ease; }
+    .header p { margin: 0; font-size: 1.1em; opacity: 0.9; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes fillBar { from { width: 0%; } to { width: var(--fill-width, 100%); } }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s ease; }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 8px 12px rgba(0,0,0,0.15); }
+    .stat-card h3 { color: #667eea; margin: 0 0 10px 0; font-size: 0.95em; }
+    .stat-value { font-size: 2.5em; font-weight: bold; color: #764ba2; margin: 10px 0; }
+    .stat-rate { color: #666; font-size: 0.9em; margin-top: 10px; }
+    .progress-container { margin: 12px 0; }
+    .progress-bar { height: 8px; background: #eee; border-radius: 10px; overflow: hidden; margin: 5px 0; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); animation: fillBar 0.8s ease-out; border-radius: 10px; }
+    .progress-text { font-size: 0.85em; color: #999; margin-top: 3px; }
+    .section { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; animation: fadeIn 0.5s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .section h2 { color: #667eea; margin: 0 0 20px 0; font-size: 1.6em; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #0f3460; }
-    th { color: #00d9ff; }
-    .phase-card { background: #0f3460; padding: 10px; margin: 5px; border-radius: 5px; }
-    .phase-card h3 { color: #00d9ff; margin: 0 0 5px 0; }
-    .phase-card p { margin: 2px 0; font-size: 0.9em; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { color: #667eea; background: #f5f5f5; font-weight: 600; }
+    tr:hover { background: #f9f9f9; }
+    .phase-card { background: linear-gradient(135deg, #667eea15, #764ba215); padding: 12px; margin: 5px; border-radius: 5px; border-left: 4px solid #667eea; }
+    .phase-card h3 { color: #667eea; margin: 0 0 5px 0; font-size: 0.95em; }
+    .phase-card p { margin: 2px 0; font-size: 0.9em; color: #555; }
     .refresh { margin-bottom: 15px; }
-    .refresh button { background: #e94560; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; }
+    .refresh button { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; transition: all 0.3s; font-weight: 600; }
+    .refresh button:hover { transform: scale(1.05); box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3); }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🔍 Clone Detection Monitor</h1>
+    <h1>Clone Detection Monitor</h1>
     <p>Uptime: ${summary.uptime || 0}s | Generated: ${summary.generatedAt || 'N/A'}</p>
   </div>
   
   <div class="refresh">
-    <button onclick="location.reload()">🔄 Refresh</button>
+    <button onclick="location.reload()">Refresh</button>
   </div>
   
   <div class="stats-grid">
     <div class="stat-card">
-      <h3>📁 Files</h3>
-      <div class="stat-value">${counts.files || 0}</div>
-      <div class="stat-rate">Rate: ${rates.filesPerSec || 0}/sec</div>
+      <h3>Files</h3>
+      <div class="stat-value">${(counts.files || 0).toLocaleString()}</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, ((counts.files || 0) / Math.max(1, (counts.chunks || 1) / 50)) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Rate: ${rates.filesPerSec || 0}/sec</div>
+      </div>
     </div>
     <div class="stat-card">
-      <h3>📦 Chunks</h3>
-      <div class="stat-value">${counts.chunks || 0}</div>
-      <div class="stat-rate">Rate: ${rates.chunksPerSec || 0}/sec</div>
+      <h3>Chunks</h3>
+      <div class="stat-value">${(counts.chunks || 0).toLocaleString()}</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, ((counts.chunks || 0) / Math.max(1, counts.chunks || 1)) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Rate: ${rates.chunksPerSec || 0}/sec</div>
+      </div>
     </div>
     <div class="stat-card">
-      <h3>🔍 Candidates</h3>
-      <div class="stat-value">${counts.candidates || 0}</div>
-      <div class="stat-rate">Rate: ${rates.candidatesPerSec || 0}/sec</div>
+      <h3>Candidates</h3>
+      <div class="stat-value">${(counts.candidates || 0).toLocaleString()}</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, ((counts.candidates || 0) / Math.max(1, counts.chunks || 1)) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Rate: ${rates.candidatesPerSec || 0}/sec</div>
+      </div>
     </div>
     <div class="stat-card">
-      <h3>🧬 Clones</h3>
-      <div class="stat-value">${counts.clones || 0}</div>
-      <div class="stat-rate">Rate: ${rates.clonesPerSec || 0}/sec</div>
+      <h3>Clones</h3>
+      <div class="stat-value">${(counts.clones || 0).toLocaleString()}</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, ((counts.clones || 0) / Math.max(1, counts.candidates || 1)) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Rate: ${rates.clonesPerSec || 0}/sec</div>
+      </div>
     </div>
   </div>
   
   <div class="stats-grid">
     <div class="stat-card">
-      <h3>⏱️ Processing Time</h3>
-      <p>Time per file: ${timePerUnit.fileMs || 0}ms</p>
-      <p>Time per chunk: ${timePerUnit.chunkMs || 0}ms</p>
+      <h3>Time per File</h3>
+      <div class="stat-value">${(parseFloat(timePerUnit.fileMs || 0)).toFixed(2)}ms</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, (parseFloat(timePerUnit.fileMs || 0) / 1000) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Processing efficiency</div>
+      </div>
     </div>
     <div class="stat-card">
-      <h3>📋 Status Updates</h3>
-      <div class="stat-value">${counts.statusUpdates || 0}</div>
+      <h3>Time per Chunk</h3>
+      <div class="stat-value">${(parseFloat(timePerUnit.chunkMs || 0)).toFixed(4)}ms</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, (parseFloat(timePerUnit.chunkMs || 0) / 0.01) * 100)}%"></div>
+        </div>
+        <div class="progress-text">Per-chunk processing</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <h3>Status Updates</h3>
+      <div class="stat-value">${(counts.statusUpdates || 0).toLocaleString()}</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${Math.min(100, ((counts.statusUpdates || 0) / Math.max(1, counts.statusUpdates || 1)) * 100)}%"></div>
+        </div>
+        <div class="progress-text">System events logged</div>
+      </div>
     </div>
   </div>
   
   ${phaseHtml ? `
   <div class="section">
-    <h2>📊 Phase Statistics</h2>
+    <h2>Phase Statistics</h2>
     <div style="display: flex; flex-wrap: wrap;">${phaseHtml}</div>
   </div>
   ` : ''}
   
   <div class="section">
-    <h2>📋 Recent Status Updates</h2>
+    <h2>Recent Status Updates</h2>
     <table>
       <thead><tr><th>Timestamp</th><th>Message</th></tr></thead>
-      <tbody>${updatesHtml || '<tr><td colspan="2">No updates yet</td></tr>'}</tbody>
+      <tbody>${updatesHtml || '<tr><td colspan="2">No updates yet. Check back soon!</td></tr>'}</tbody>
     </table>
   </div>
+  
+  <script>
+    // Auto-refresh dashboard every 30 seconds
+    setTimeout(() => location.reload(), 30000);
+    
+    // Add animation on load
+    document.addEventListener('DOMContentLoaded', function() {
+      const cards = document.querySelectorAll('.stat-card, .section');
+      cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(10px)';
+        setTimeout(() => {
+          card.style.transition = 'all 0.5s ease';
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0)';
+        }, index * 50);
+      });
+    });
+  </script>
 </body>
 </html>`;
 }

@@ -4,7 +4,7 @@
             [cljdetector.process.expander :as expander]
             [cljdetector.storage.storage :as storage]))
 
-(def DEFAULT-CHUNKSIZE 5)
+(def DEFAULT-CHUNKSIZE 10)
 (def source-dir (or (System/getenv "SOURCEDIR") "/tmp"))
 (def source-type #".*\.java")
 

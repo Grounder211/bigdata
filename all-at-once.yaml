@@ -12,15 +12,15 @@ services:
     volumes:
       - ./Containers/cljdetector:/usr/src/app
       - ./logs:/usr/src/app/logs
-      - qc-volume:/QualitasCorpus   # ✅ USE DOCKER VOLUME
+      - qc-volume:/QualitasCorpus   #  USE DOCKER VOLUME
     environment:
       DBHOST: dbstorage
-      SOURCEDIR: "/QualitasCorpus/QualitasCorpus-20130901r/Systems"   # 🔥 IMPORTANT
+      SOURCEDIR: "/QualitasCorpus/QualitasCorpus-20130901r/Systems"  
       CHUNKSIZE: 5
       BATCH_SIZE: 1000
       STATS_LOG: "/usr/src/app/logs/stats.ndjson"
       JAVA_OPTS: "-Xmx4g -Xms2g"
-    command: ["lein", "run", "CLEAR"]   # ✅ AUTO START
+    command: ["lein", "run", "CLEAR"]   #  AUTO START
     stdin_open: true
     tty: true
 

@@ -1,3 +1,17 @@
 {:timestamp "2026-03-24T14:21:52.437773175", :phase "files", :durationMs 160114}
 {:timestamp "2026-03-24T15:23:01.766532637", :phase "chunkify", :durationMs 3669202}
 {:timestamp "2026-03-24T15:27:06.470470555", :phase "chunkify", :chunks 20123043, :files 163589}
+{:timestamp "2026-03-24T16:36:18.152971378", :phase "files", :durationMs 122291}
+{:timestamp "2026-03-24T17:40:59.781922425", :phase "chunkify", :durationMs 3881558}
+{:timestamp "2026-03-24T17:43:16.734071127", :phase "chunkify", :chunks 20123043, :files 163589}
+{:timestamp "2026-03-24T17:47:13.986082001", :phase "candidates", :durationMs 237211}
+{:timestamp "2026-03-24T17:51:58.515310091", :phase "clones", :durationMs 284387}
+{:timestamp "2026-03-24T18:05:04.825320427", :phase "files", :durationMs 111638}
+{:timestamp "2026-03-24T19:29:07.160826176", :phase "chunkify", :durationMs 5042265}
+{:timestamp "2026-03-24T19:31:26.398232963", :phase "chunkify", :chunks 20123043, :files 163589}
+{:timestamp "2026-03-24T19:34:45.204076013", :phase "candidates", :durationMs 198757}
+{:timestamp "2026-03-24T22:01:19.486653634", :phase "files", :durationMs 106089}
+{:timestamp "2026-03-25T14:54:01.413370334", :phase "files", :durationMs 48198}
+{:timestamp "2026-03-25T15:46:28.001515708", :phase "chunkify", :durationMs 3146574}
+{:timestamp "2026-03-25T15:47:21.413370095", :phase "chunkify", :chunks 20123043, :files 163589}
+{:timestamp "2026-03-25T15:48:44.570298758", :phase "candidates", :durationMs 83142}

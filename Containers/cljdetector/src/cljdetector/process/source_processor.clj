@@ -5,25 +5,25 @@
             [cljdetector.storage.storage :as storage]))
 
 ;; =========================
-;; FILE VALIDATION (CRITICAL FIX)
+;; FILE VALIDATION
 ;; =========================
 (defn valid-source-file? [file pattern]
-  (and (.isFile file)                     ;; MUST be a file (fixes your crash)
-       (.canRead file)                    ;; avoid permission issues
+  (and (.isFile file)
+       (.canRead file)
        (re-matches pattern (.getName file))))
 
 ;; =========================
-;; SAFE FILE READ (ROBUSTNESS)
+;; SAFE FILE READ
 ;; =========================
 (defn safe-slurp [file]
   (try
     (slurp file)
-    (catch Exception e
+    (catch Exception _
       (println "Skipping unreadable file:" (.getPath file))
       nil)))
 
 ;; =========================
-;; PATTERNS (UNCHANGED)
+;; PATTERNS
 ;; =========================
 (def emptyLine (re-pattern "^\\s*$"))
 (def oneLineComment (re-pattern "//.*"))
@@ -32,7 +32,7 @@
 (def closeMultiLineComment (re-pattern "^[^*/]*\\*+/"))
 
 ;; =========================
-;; LINE PROCESSING (UNCHANGED)
+;; LINE PROCESSING
 ;; =========================
 (defn process-lines [lines]
   (drop 1
@@ -65,7 +65,13 @@
                 lines)))
 
 ;; =========================
-;; CHUNKIFY SINGLE FILE (FIXED + SAFE)
+;; CHUNK FILTERING (NEW)
+;; =========================
+(defn meaningful-chunk? [chunk]
+  (> (count (filter #(not= "" %) (map :contents chunk))) 3))
+
+;; =========================
+;; CHUNKIFY SINGLE FILE (FIXED)
 ;; =========================
 (defn chunkify-file [chunkSize file]
   (try
@@ -74,11 +80,11 @@
           content (safe-slurp file)]
 
       (if (nil? content)
-        [] ;; skip bad files
+        []
 
         (let [chunk-limit (or (some-> (System/getenv "CHUNK_LIMIT") Integer/parseInt) 0)
 
-              filteredLines (filter #(not (= "" (:contents %)))
+              filteredLines (filter #(not= "" (:contents %))
                                     (-> content
                                         (string/split #"\n")
                                         process-lines))
@@ -89,16 +95,17 @@
                          (min total-chunks chunk-limit)
                          total-chunks)
 
-              chunks (map (fn [i]
-                            (let [chunk (take chunkSize (nthrest filteredLines i))
-                                  startLine (:lineNumber (first chunk))
-                                  endLine (:lineNumber (last chunk))
-                                  hash (digest/md5 (string/join "\n" (map :contents chunk)))]
-                              {:fileName fileName
-                               :startLine startLine
-                               :endLine endLine
-                               :chunkHash hash}))
-                          (range max-iter))
+              ;; FIXED: filtering applied here
+              chunks (->> (range max-iter)
+                          (map (fn [i]
+                                 (let [chunk (take chunkSize (nthrest filteredLines i))]
+                                   (when (meaningful-chunk? chunk)
+                                     {:fileName fileName
+                                      :startLine (:lineNumber (first chunk))
+                                      :endLine (:lineNumber (last chunk))
+                                      :chunkHash (digest/md5
+                                                   (string/join "\n" (map :contents chunk)))}))))
+                          (remove nil?))
 
               duration (/ (- (System/nanoTime) start) 1000000.0)]
 
@@ -111,7 +118,7 @@
       [])))
 
 ;; =========================
-;; STREAMING CHUNKIFY (GOOD DESIGN)
+;; STREAMING CHUNKIFY (PARALLELIZED)
 ;; =========================
 (def GC-INTERVAL 500)
 
@@ -119,26 +126,24 @@
 
   (println "Starting chunkification...")
 
-  (doseq [[idx file] (map-indexed vector files)]
+  ;; parallel processing
+  (doseq [[idx file] (map-indexed vector (pmap identity files))]
 
     (let [chunks (chunkify-file chunkSize file)]
 
-      ;; streaming write (scalable)
       (when (seq chunks)
         (storage/store-chunks! chunks)))
 
-    ;; progress logging
     (when (= 0 (mod idx 100))
       (println "Processed files:" idx))
 
-    ;; GC (helps large corpus)
     (when (= 0 (mod idx GC-INTERVAL))
       (System/gc)))
 
   (println "Chunkification complete"))
 
 ;; =========================
-;; FIXED DIRECTORY TRAVERSAL (CRITICAL)
+;; DIRECTORY TRAVERSAL
 ;; =========================
 (defn traverse-directory [path pattern]
   (->> (file-seq (file path))

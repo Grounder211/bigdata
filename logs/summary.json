@@ -1,76 +1,48 @@
 {
-  "generatedAt": "2026-03-24T16:13:42.030Z",
-  "uptime": 6873,
+  "generatedAt": "2026-03-29T15:51:46.185Z",
+  "uptime": 1220,
   "counts": {
     "files": 163589,
-    "chunks": 20123043,
+    "chunks": 7262933,
     "candidates": 0,
     "clones": 0,
-    "statusUpdates": 5
+    "statusUpdates": 2
   },
   "withRates": {
     "files": 163589,
-    "chunks": 20123043,
+    "chunks": 7262933,
     "candidates": 0,
     "clones": 0,
-    "updates": 5,
-    "timestamp": 1774368822018,
+    "updates": 2,
+    "timestamp": 1774799506184,
     "rates": {
       "filesPerSec": "0.00",
-      "chunksPerSec": "0.00",
+      "chunksPerSec": "460.39",
       "candidatesPerSec": "0.00",
       "clonesPerSec": "0.00"
     },
     "timePerUnit": {
       "fileMs": "0.000000",
-      "chunkMs": "0.000000"
+      "chunkMs": "2.172069"
     }
   },
   "statistics": [
     {
-      "_id": "69c29e00bdc8561e906d4b53",
-      "timestamp": "2026-03-24T14:21:52.437773175",
+      "_id": "69c946093ead664ab1b9cd31",
+      "timestamp": "2026-03-29T15:32:25.068399049",
       "phase": "files",
-      "durationMs": 160114
-    },
-    {
-      "_id": "69c2ac55bdc8561e90a058f7",
-      "timestamp": "2026-03-24T15:23:01.766532637",
-      "phase": "chunkify",
-      "durationMs": 3669202
-    },
-    {
-      "_id": "69c2ad4abdc8561e90a058f9",
-      "timestamp": "2026-03-24T15:27:06.470470555",
-      "phase": "chunkify",
-      "chunks": 20123043,
-      "files": 163589
+      "durationMs": 58076
     }
   ],
   "latestUpdates": [
     {
-      "_id": "69c2ad4abdc8561e90a058fb",
-      "timestamp": "2026-03-24T15:27:06.986570138",
-      "message": "Identifying clone candidates..."
-    },
-    {
-      "_id": "69c2ad4abdc8561e90a058fa",
-      "timestamp": "2026-03-24T15:27:06.916117430",
-      "message": "Finished chunking: 20123043 chunks"
-    },
-    {
-      "_id": "69c2ac55bdc8561e90a058f8",
-      "timestamp": "2026-03-24T15:23:01.801777887",
-      "message": "Recreating chunk indexes..."
-    },
-    {
-      "_id": "69c29d60bdc8561e906acc4d",
-      "timestamp": "2026-03-24T14:19:12.295263712",
+      "_id": "69c945ce3ead664ab1b74e2b",
+      "timestamp": "2026-03-29T15:31:26.964324050",
       "message": "Dropping chunk indexes..."
     },
     {
-      "_id": "69c29d60bdc8561e906acc4c",
-      "timestamp": "2026-03-24T14:19:12.293829503",
+      "_id": "69c945ce3ead664ab1b74e2a",
+      "timestamp": "2026-03-29T15:31:26.962407925",
       "message": "Reading and Processing files..."
     }
   ]

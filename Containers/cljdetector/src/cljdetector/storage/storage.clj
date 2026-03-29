@@ -25,15 +25,13 @@
 (defn drop-chunk-indexes! []
   (try
     (mc/drop-indexes db "chunks")
-    (catch Exception e
-      (println "Index drop error:" (.getMessage e)))))
+    (catch Exception _ nil)))
 
 (defn create-chunk-indexes! []
   (try
     (mc/ensure-index db "chunks" {:chunkHash 1})
     (mc/ensure-index db "chunks" {:fileName 1 :startLine 1 :endLine 1})
-    (catch Exception e
-      (println "Index create error:" (.getMessage e)))))
+    (catch Exception _ nil)))
 
 ;; =========================
 ;; BASIC HELPERS
@@ -61,9 +59,7 @@
                        (try
                          {:fileName (.getPath f)
                           :contents (slurp f)}
-                         (catch Exception _
-                           (println "Skipping file:" (.getPath f))
-                           nil)))
+                         (catch Exception _ nil)))
                      file-group)]
       (when (seq docs)
         (mc/insert-batch db "files" docs)))))
@@ -103,18 +99,8 @@
 (defn add-stat! [phase payload]
   (let [record (merge {:timestamp (.toString (java.time.LocalDateTime/now))
                        :phase phase}
-                      payload)
-        stats-file (or (System/getenv "STATS_LOG") "logs/stats.ndjson")]
-
-    (mc/insert db "statistics" record)
-
-    (try
-      (let [f (java.io.File. stats-file)
-            dir (.getParentFile f)]
-        (when (and dir (not (.exists dir)))
-          (.mkdirs dir)))
-      (spit stats-file (str (pr-str record) "\n") :append true)
-      (catch Exception _ nil))))
+                      payload)]
+    (mc/insert db "statistics" record)))
 
 (defn time-phase [phase f]
   (let [start (System/currentTimeMillis)
@@ -124,16 +110,51 @@
     result))
 
 ;; =========================
-;; CANDIDATE GENERATION
+;; CANDIDATE GENERATION (SCALABLE)
 ;; =========================
 (defn identify-candidates! []
-  (mc/aggregate db "chunks"
-    [{$group {:_id "$chunkHash"
-              :instances {$push {:fileName "$fileName"
-                                 :startLine "$startLine"
-                                 :endLine "$endLine"}}}}
-     {$match {$expr {$gt [{$size "$instances"} 1]}}}
-     {$out "candidates"}]))
+
+  (println "Clearing old candidates...")
+  (mc/remove db "candidates")
+
+  (println "Ensuring indexes...")
+  (mc/ensure-index db "chunks" {:chunkHash 1})
+  (mc/ensure-index db "candidates" {:processed 1})
+
+  (let [batch-size 500000]
+
+    (loop [last-id nil]
+
+      (let [query (if last-id
+                    {:_id {$gt last-id}}
+                    {})
+
+            batch (mc/find-maps db "chunks"
+                                query
+                                {:limit batch-size
+                                 :sort {:_id 1}})
+
+            last-doc (last batch)]
+
+        (when (seq batch)
+
+          (println "Processing batch...")
+
+          (mc/aggregate db "chunks"
+            [{$match query}
+             {$limit batch-size}
+             {$group {:_id "$chunkHash"
+                      :instances {$push {:fileName "$fileName"
+                                         :startLine "$startLine"
+                                         :endLine "$endLine"}}}}
+             {$match {$expr {$gt [{$size "$instances"} 1]}}}
+             {$merge {:into "candidates"
+                      :on "_id"
+                      :whenMatched "merge"
+                      :whenNotMatched "insert"}}]
+            {:allowDiskUse true})
+
+          (recur (:_id last-doc)))))))
 
 ;; =========================
 ;; ANALYTICS
@@ -142,21 +163,16 @@
   (let [result (mc/aggregate db "clones"
                  [{$project {:size {$size "$instances"}}}
                   {$group {:_id nil :avgSize {$avg "$size"}}}])]
-    (if (seq result)
-      (:avgSize (first result))
-      0)))
+    (if (seq result) (:avgSize (first result)) 0)))
 
 (defn avg-chunks-per-file []
   (let [result (mc/aggregate db "chunks"
                  [{$group {:_id "$fileName" :chunks {$sum 1}}}
                   {$group {:_id nil :avgChunks {$avg "$chunks"}}}])]
-    (if (seq result)
-      (:avgChunks (first result))
-      0)))
+    (if (seq result) (:avgChunks (first result)) 0)))
 
-;; =========================
-;; CLONE + SOURCE MERGING (REQUIRED FIX)
-;; =========================
+
+
 (defn consolidate-clones-and-source []
   (mc/aggregate db "clones"
     [{$project {:_id 0
@@ -192,16 +208,21 @@
                 :instances 1
                 :contents "$sourceContents.contents"}}]))
 
+
 ;; =========================
-;; EXPANSION SUPPORT
+;; EXPANSION SUPPORT (FIXED)
 ;; =========================
 (defn get-dbconnection []
   (mg/connect {:host hostname}))
 
 (defn get-one-candidate [conn]
-  (from-db-object
-   (mc/find-one (mg/get-db conn dbname) "candidates" {})
-   true))
+  (let [db (mg/get-db conn dbname)]
+    (from-db-object
+     (mc/find-and-modify db "candidates"
+       {:processed {$ne true}}
+       {$set {:processed true}}
+       {:return-new true})
+     true)))
 
 (defn get-overlapping-candidates [conn candidate]
   (let [db (mg/get-db conn dbname)
@@ -209,10 +230,8 @@
     (mc/aggregate db "candidates"
       [{$match {"instances.fileName"
                 {$all (map #(:fileName %) (:instances clj-cand))}}}
-
        {$addFields {:candidate candidate}}
        {$unwind "$instances"}
-
        {$project {:matches
                   {$filter
                    {:input "$candidate.instances"
@@ -224,21 +243,16 @@
                   :instances 1
                   :numberOfInstances 1
                   :candidate 1}}
-
        {$match {$expr {$gt [{$size "$matches"} 0]}}}
-
        {$group {:_id "$_id"
                 :candidate {$first "$candidate"}
                 :numberOfInstances {$max "$numberOfInstances"}
                 :instances {$push "$instances"}}}
-
        {$match {$expr {$eq [{$size "$candidate.instances"} "$numberOfInstances"]}}}
-
        {$project {:_id 1
                   :numberOfInstances 1
                   :instances 1}}])))
 
+;; 🔥 IMPORTANT: no deletion anymore
 (defn remove-overlapping-candidates! [conn candidates]
-  (mc/remove (mg/get-db conn dbname)
-             "candidates"
-             {:_id {$in (map #(:_id %) candidates)}}))
+  nil)
